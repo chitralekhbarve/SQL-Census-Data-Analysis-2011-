@@ -1,0 +1,188 @@
+--Selecting the Data for specific state: 
+
+SELECT * from dataset1
+WHERE state = 'West Bengal'
+
+--Calculation of population
+
+SELECT SUM(population)FROM dataset2
+
+--Insight - Total Population was 1210854977 in 2011
+
+--Average growth rate of population (2011)
+
+SELECT AVG(growth)*100 AS Average_growth from dataset1
+
+--Insight - 19.26%
+
+--Average growth % of states 
+
+SELECT state, AVG(growth)*100 AS State_growth from dataset1
+GROUP BY state
+ORDER BY state DESC
+--Insight: "West Bengal" , Uttrakhand , UP
+
+Average sex ratio (top 3) (2011)                              
+
+SELECT state, ROUND(AVG(sex_ratio),0) AS Average_sex_ratio from dataset1
+GROUP BY state
+ORDER BY average_sex_ratio DESC
+
+-- Top 3 : Kerela, Puducherry, Uttrakhand
+
+--Average litreacy rate >85
+
+SELECT state, ROUND(AVG(literacy),0) Avg_lit_rate FROM dataset1
+GROUP BY state 
+HAVING ROUND(AVG(literacy),0) > 90
+ORDER BY Avg_lit_rate DESC
+
+--Insight : Kerela, Lakshadweep
+
+--Top 3 states with lowest population growth rate (Temp tables)
+
+SELECT state, AVG(growth)*100 AS growth_rate from dataset1
+GROUP BY state
+ORDER BY growth_rate ASC
+LIMIT 3
+
+--Insight: Andaman and Nicobar, Kerela, Lakshdweep
+
+--Top 3 and botton 3 states in literacy rates
+
+CREATE TEMP TABLE topstates(
+State VARCHAR(200),
+Topstates numeric ) -- creating temp table for top states 
+
+INSERT INTO Topstates
+
+SELECT state, ROUND(AVG(literacy),0) Avg_lit_rate FROM dataset1
+GROUP BY state 
+ORDER BY Avg_lit_rate DESC -- inserting data into temp table
+
+
+CREATE TEMP TABLE lowstates(
+State VARCHAR(200),
+lowstate numeric ) -- creating temp table for lowest state
+
+INSERT INTO lowstates
+
+SELECT state, ROUND(AVG(literacy),0) Avg_lit_rate FROM dataset1
+GROUP BY state 
+ORDER BY Avg_lit_rate ASC -- inserting data into temp table
+
+-- Union 
+
+SELECT * FROM (SELECT state, ROUND(AVG(literacy),0) Avg_lit_rate FROM dataset1
+GROUP BY state 
+ORDER BY Avg_lit_rate DESC 
+LIMIT 3 ) a
+
+UNION 
+
+SELECT * FROM (SELECT state, ROUND(AVG(literacy),0) Avg_lit_rate FROM dataset1
+GROUP BY state 
+ORDER BY Avg_lit_rate ASC
+LIMIT 3 ) b
+
+-- Top 3 and Botton 3 in one table 
+
+--States starting with letter M
+
+SELECT DISTINCT State FROM  dataset1
+WHERE state LIKE 'M%'
+
+-- Displays all the states with M 
+
+--JOINS : Total numbers of males and females (District Wise)
+
+ALTER TABLE dataset1
+ALter Column sex_ratio TYPE decimal
+
+SELECT district, state, Round(population/(sex_ratio+1),0) as Males,ROUND((population*sex_ratio)/(sex_ratio+1),0) Females
+FROM(SELECT  dataset1.district, dataset1.state, dataset1.sex_ratio/1000 AS sex_ratio, dataset2.population
+from Dataset1
+INNER JOIN dataset2 ON dataset1.district = dataset2.district) C
+
+--Shows the district wise males and female population
+
+--State wise Population  of males and females
+
+SELECT D.state,SUM(D.males) AS Total_Males, SUM(D.females) as Total_females FROM
+(SELECT district, state, Round(population/(sex_ratio+1),0) as Males,ROUND((population*sex_ratio)/(sex_ratio+1),0) Females
+FROM(SELECT  dataset1.district, dataset1.state, dataset1.sex_ratio/1000 AS sex_ratio, dataset2.population
+from Dataset1
+INNER JOIN dataset2 ON dataset1.district = dataset2.district) C) D
+GROUP BY State
+
+-- Total Literacy Rate (state Wise) (Using Join and Subqueries )
+
+SELECT E.state, SUM(Literate_People) AS Literate, SUM(illiterate_people) AS Illiterate FROM
+(SELECT D.District, D.state,ROUND(D.literacy_rate*D.population,0) Literate_people,
+ROUND((1-D.literacy_rate)*D.population,0) AS Illiterate_people FROM
+(SELECT dataset1.district, dataset1.state, dataset1.literacy/100 AS Literacy_rate,
+dataset2.population from Dataset1
+INNER JOIN dataset2 ON dataset1.district = dataset2.district) D) E
+GROUP BY E.state
+ORDER BY SUM(Literate_People) DESC
+
+--Insight: Top state : KERELA
+
+--State wise Population in Previous census (2010). The data used for analysis is from 2011
+
+SELECT E.state, SUM(E.Previous_Census_population) AS Previous_population, SUM(E.Current_Population) AS Current_Population FROM
+(SELECT D.District, D.state, ROUND(D.Population/(1+D.growth_rate),0) Previous_census_population, Population Current_population FROM
+(SELECT dataset1.district, dataset1.state, dataset1.growth AS growth_rate,
+dataset2.population from Dataset1
+INNER JOIN dataset2 ON dataset1.district = dataset2.district) D) E
+GROUP BY E.State
+
+--Total Change in the population 
+
+SELECT SUM(M.Previous_Population) Previous_census, SUM(M.current_Population) Current_Population FROM
+(SELECT E.state, SUM(E.Previous_Census_population) AS Previous_population, SUM(E.Current_Population) AS Current_Population FROM
+(SELECT D.District, D.state, ROUND(D.Population/(1+D.growth_rate),0) Previous_census_population, Population Current_population FROM
+(SELECT dataset1.district, dataset1.state, dataset1.growth AS growth_rate,
+dataset2.population from Dataset1
+INNER JOIN dataset2 ON dataset1.district = dataset2.district) D) E GROUP BY E.State) M
+
+--Population VS area
+SELECT G.Total_area/previous_Census Previous_population, G.total_area/Current_Population Current_Population FROM
+(SELECT Q.*, R.total_area FROM (
+SELECT '1' AS Keyy, N.* FROM
+(SELECT SUM(M.Previous_Population) Previous_census, SUM(M.current_Population) Current_Population FROM
+(SELECT E.state, SUM(E.Previous_Census_population) AS Previous_population, SUM(E.Current_Population) AS Current_Population FROM
+(SELECT D.District, D.state, ROUND(D.Population/(1+D.growth_rate),0) Previous_census_population, Population Current_population FROM
+(SELECT dataset1.district, dataset1.state, dataset1.growth AS growth_rate,
+dataset2.population from Dataset1
+INNER JOIN dataset2 ON dataset1.district = dataset2.district) D) E GROUP BY E.State) M) N)
+Q INNER JOIN (
+
+SELECT '1' as Keyy, z.* from(
+SELECT SUM(area) Total_area FROM Dataset2)Z) R ON Q.keyy = R.keyy) G
+
+--WINDOW Function (RANK FUNCTION)
+
+-- TOP 3 district from each state with higest literacy rate
+
+SELECT a.* FROM 
+(SELECT district, state, literacy , RANK() OVER (Partition by State ORDER BY Literacy DESC) RNK
+from Dataset1) A
+WHERE a.rnk IN (1,2,3) 
+ORDER BY state
+ 
+--Displays the Top 3 district from each state. 
+
+
+--Thank you-
+
+
+
+
+
+
+ 
+
+
+
+
